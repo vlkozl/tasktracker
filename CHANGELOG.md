@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- A PowerShell installer for the current user, `scripts/Install-TaskTracker.ps1`. One command (`irm … | iex`, see the README) downloads the latest release from GitHub, installs it to `%LOCALAPPDATA%\Programs\TaskTracker` and adds that folder to the user's PATH. Running it again updates TaskTracker in place. It needs no GitHub CLI, authentication or administrator rights. `-Version vX.Y.Z` installs a specific release.
+
 ## [1.6.0] - 2026-10-28
 
 ### Added

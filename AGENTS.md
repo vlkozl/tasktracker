@@ -138,6 +138,19 @@ VS Code tasks in `.vscode/tasks.json` wrap the same commands (`build`, `test`, `
 - `scripts/*.ps1` must also run in Windows PowerShell 5.1:
   - no ternary operator and no `??`;
   - `$PSScriptRoot` is empty inside `param()` defaults in 5.1, so resolve defaults in the script body.
+- `Install-TaskTracker.ps1` covers the main path in Windows PowerShell 5.1 and PowerShell 7, and stays short.
+  Don't add handling for rare cases such as antivirus locks, two installers at once, 32-bit hosts or locked-down
+  sessions. It also runs as `irm … | iex`, in the user's own session:
+  - `param()` is then an ordinary variable declaration in the user's session: no validation attributes (check in
+    the body), and a name the user won't have (`$TaskTrackerVersion`, alias `-Version`), removed at the start;
+  - keep everything after `param()` inside `& { … }` so settings and variables don't stay behind;
+  - change the user PATH only through `HKCU\Environment` with `DoNotExpandEnvironmentNames`, never with
+    `[Environment]::SetEnvironmentVariable('Path', …)`, which expands `%VAR%` entries and writes `REG_SZ`;
+  - pass `[System.Management.Automation.Language.NullString]::Value`, not `$null`, to .NET `string` parameters:
+    PowerShell passes `$null` as `""`, and `SetEnvironmentVariable` in PowerShell 7 stores that instead of deleting;
+  - a running exe can be renamed, so `File.Replace` succeeds under a running TaskTracker. The process check
+    before the download is what prevents that.
+- Test the installer on a copy with the install folder and the registry key redirected, never against the real profile.
 - Code signing is optional. It uses a self-signed certificate, and `Sign-Exe.ps1` fails if it can't get a timestamp.
   The certificate subject (`CN=Vladimir Kozlov (TaskTracker code signing)`) is a default in both
   `New-SigningCert.ps1` and `Sign-Exe.ps1`. If you change it, change it in both.
