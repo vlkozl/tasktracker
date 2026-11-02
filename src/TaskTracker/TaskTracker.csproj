@@ -16,7 +16,7 @@
 
   <!-- Shown in the exe's Properties > Details and in Task Manager. -->
   <PropertyGroup>
-    <Version>1.6.0</Version>
+    <Version>1.7.0</Version>
     <Product>TaskTracker</Product>
     <AssemblyTitle>TaskTracker - console time tracker</AssemblyTitle>
     <Description>Tracks time spent on tasks and writes one JSON log per day.</Description>

@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-11-03
+
 ### Added
 
 - A PowerShell installer for the current user, `scripts/Install-TaskTracker.ps1`. One command (`irm … | iex`, see the README) downloads the latest release from GitHub, installs it to `%LOCALAPPDATA%\Programs\TaskTracker` and adds that folder to the user's PATH. Running it again updates TaskTracker in place. It needs no GitHub CLI, authentication or administrator rights. `-Version vX.Y.Z` installs a specific release.
@@ -123,7 +125,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Optional self-signed code signing with the **publish + sign** task, plus scripts to create, use and trust the certificate. Signatures are timestamped, so signing needs internet access. Signing is not required to distribute the exe.
 - VS Code build, test and publish tasks, an F5 debug configuration and an xUnit test suite.
 
-[unreleased]: https://github.com/vlkozl/tasktracker/compare/v1.6.0...HEAD
+[unreleased]: https://github.com/vlkozl/tasktracker/compare/v1.7.0...HEAD
+[1.7.0]: https://github.com/vlkozl/tasktracker/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/vlkozl/tasktracker/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/vlkozl/tasktracker/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/vlkozl/tasktracker/compare/v1.3.0...v1.4.0
