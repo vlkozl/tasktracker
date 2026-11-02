@@ -38,7 +38,7 @@ public sealed class ConsoleUi(Tracker tracker, DayLogStore store)
         AnsiConsole.MarkupLine($"[bold]TaskTracker[/] {Markup.Escape(Version)}");
         var status = tracker.GetStatus();
         if (status.Day.TaskCount > 0)
-            WriteSummary(status.Day, AnsiConsole.Console);
+            WriteReport(status.Day);
 
         var task = continueTask ?? PickTask(allowCancel: false)!;
         var running = true;
@@ -224,14 +224,17 @@ public sealed class ConsoleUi(Tracker tracker, DayLogStore store)
             TrackerState.Paused => $"[yellow]⏸ Paused: {task}[/]   [bold]{duration}[/]",
             _ => "[grey]■ No task running[/]",
         };
-        var taskKeys = status.State == TrackerState.Idle
-            ? "[[S]] start a task"
-            : $"[[S]] switch task   [[P]] {(status.State == TrackerState.Running ? "pause" : "resume")}   [[E]] end task";
+        // Two rows, read top to bottom per column: task choice, the current task, the day. Idle hides P and E.
+        string[][] keys = status.State == TrackerState.Idle
+            ? [["[N] new task", "[S] start a task"], ["[R] report", "[Q] quit"]]
+            : [["[N] new task", "[S] switch task"],
+               [status.State == TrackerState.Running ? "[P] pause" : "[P] resume", "[E] end task"],
+               ["[R] report", "[Q] quit"]];
 
         var text =
             $"{current}\n" +
             $"Today: [bold]{FormatDuration(status.Day.Total)}[/] across [bold]{status.Day.TaskCount}[/] task(s)\n\n" +
-            $"[grey][[N]] new task   {taskKeys}   [[R]] report   [[Q]] quit[/]";
+            $"[grey]{KeyRow(keys, 0)}\n{KeyRow(keys, 1)}[/]";
 
         var panel = new Panel(new Markup(text))
             .Header($" TaskTracker {Markup.Escape(Version)} — {status.Day.Date:ddd, dd MMM yyyy} ")
@@ -239,6 +242,11 @@ public sealed class ConsoleUi(Tracker tracker, DayLogStore store)
             .Padding(2, 1);
         return (text, panel);
     }
+
+    /// <summary>One row of the key columns, each column padded to its widest entry so the rows line up.</summary>
+    private static string KeyRow(string[][] columns, int row) =>
+        Markup.Escape(string.Concat(columns.Select((column, i) =>
+            i == columns.Length - 1 ? column[row] : column[row].PadRight(column.Max(k => k.Length) + 3))));
 
     private string? PickTask(bool allowCancel)
     {
@@ -329,6 +337,7 @@ public sealed class ConsoleUi(Tracker tracker, DayLogStore store)
         while (true)
         {
             var shown = "";
+            DaySummary? shownDay = null;
             while (!Console.KeyAvailable)
             {
                 var status = tracker.GetStatus();
@@ -338,6 +347,7 @@ public sealed class ConsoleUi(Tracker tracker, DayLogStore store)
                 if (text != shown)
                 {
                     shown = text;
+                    shownDay = status.Day;
                     Draw(() =>
                     {
                         AnsiConsole.Clear();
@@ -353,7 +363,8 @@ public sealed class ConsoleUi(Tracker tracker, DayLogStore store)
             {
                 case ConsoleKey.I:
                     AnsiConsole.Clear();
-                    WriteIntervals(tracker.GetStatus().Day);
+                    // The day on screen, not a newer snapshot, so the totals match the summary just shown.
+                    WriteIntervals(shownDay ?? tracker.GetStatus().Day);
                     AnsiConsole.MarkupLine("[grey]Press any key to return to the report[/]");
                     Console.ReadKey(intercept: true);
                     break;
@@ -423,25 +434,61 @@ public sealed class ConsoleUi(Tracker tracker, DayLogStore store)
     }
 
     /// <summary>The day's summary, or a short note for an empty day. Also used by <c>TaskTracker report</c>.</summary>
-    public static void WriteReport(DaySummary day, IAnsiConsole? console = null)
+    /// <remarks>With <paramref name="intervals"/>, the intervals table follows, laid out from the same widths.</remarks>
+    public static void WriteReport(DaySummary day, IAnsiConsole? console = null, bool intervals = false)
     {
         console ??= AnsiConsole.Console;
         if (day.TaskCount == 0)
+        {
             console.MarkupLine($"[grey]Nothing tracked on {day.Date:ddd dd MMM yyyy}.[/]");
-        else
-            WriteSummary(day, console);
+            return;
+        }
+
+        var layout = ReportLayout.For(day);
+        WriteSummary(day, layout, console);
+        if (intervals && day.Intervals.Count > 0)
+            WriteIntervals(day, layout, console);
     }
 
-    private static void WriteSummary(DaySummary day, IAnsiConsole console)
+    /// <summary>
+    /// Column widths shared by the summary and the intervals table, so that the two line up when printed
+    /// one after the other: same widths for the same columns, and the same total width. The intervals table
+    /// has no Intervals column, so its Task column takes that column's place (its width plus padding and border).
+    /// </summary>
+    private sealed record ReportLayout(int Task, int Intervals, int Total)
+    {
+        public const int Start = 11; // "First start"
+        public const int End = 8;    // "Last end"
+        private const int ColumnChrome = 3; // padding left and right, plus the border between columns
+
+        public int IntervalsTask => Task + Intervals + ColumnChrome;
+
+        public static ReportLayout For(DaySummary day)
+        {
+            var intervals = Math.Max("Intervals".Length, day.Tasks.Select(t => t.IntervalCount.ToString().Length).DefaultIfEmpty(0).Max());
+            var task = new[] { "Task", TasksFooter(day) }
+                .Concat(day.Tasks.Select(t => t.Task))
+                .Max(s => s.GetCellWidth());
+            // The day's total is the longest duration: every task total and interval is part of it.
+            var total = Math.Max("Total".Length, FormatDuration(day.Total).Length);
+            return new ReportLayout(task, intervals, total);
+        }
+    }
+
+    private static string TasksFooter(DaySummary day) => $"{day.TaskCount} task(s)";
+
+    private static string IntervalsFooter(DaySummary day) => $"{day.Intervals.Count} interval(s)";
+
+    private static void WriteSummary(DaySummary day, ReportLayout layout, IAnsiConsole console)
     {
         var table = new Table()
             .Border(TableBorder.Rounded)
             .Title($"{day.Date:dddd, dd MMM yyyy}")
-            .AddColumn(new TableColumn("Task").Footer($"[bold]{day.TaskCount} task(s)[/]"))
-            .AddColumn(new TableColumn("Intervals").RightAligned())
-            .AddColumn(new TableColumn("First start").Centered())
-            .AddColumn(new TableColumn("Last end").Centered())
-            .AddColumn(new TableColumn("Total").RightAligned().Footer($"[bold]{FormatDuration(day.Total)}[/]"));
+            .AddColumn(new TableColumn("Task").Width(layout.Task).Footer($"[bold]{TasksFooter(day)}[/]"))
+            .AddColumn(new TableColumn("Intervals").Width(layout.Intervals).RightAligned())
+            .AddColumn(new TableColumn("First start").Width(ReportLayout.Start).Centered())
+            .AddColumn(new TableColumn("Last end").Width(ReportLayout.End).Centered())
+            .AddColumn(new TableColumn("Total").Width(layout.Total).RightAligned().Footer($"[bold]{FormatDuration(day.Total)}[/]"));
 
         foreach (var task in day.Tasks)
         {
@@ -455,26 +502,29 @@ public sealed class ConsoleUi(Tracker tracker, DayLogStore store)
         console.Write(table);
     }
 
-    /// <summary>Every interval of the day in time order. Also used by <c>TaskTracker report --intervals</c>.</summary>
-    public static void WriteIntervals(DaySummary day)
+    /// <summary>Every interval of the day in time order, for <c>I</c> in the report. <c>report --intervals</c> goes through <see cref="WriteReport"/>.</summary>
+    public static void WriteIntervals(DaySummary day, IAnsiConsole? console = null) =>
+        WriteIntervals(day, ReportLayout.For(day), console ?? AnsiConsole.Console);
+
+    private static void WriteIntervals(DaySummary day, ReportLayout layout, IAnsiConsole console)
     {
         var table = new Table()
             .Border(TableBorder.Rounded)
             .Title($"Intervals, {day.Date:ddd dd MMM yyyy}")
-            .AddColumn("Start")
-            .AddColumn("End")
-            .AddColumn(new TableColumn("Duration").RightAligned())
-            .AddColumn("Task");
+            .AddColumn(new TableColumn("Task").Width(layout.IntervalsTask).Footer($"[bold]{IntervalsFooter(day)}[/]"))
+            .AddColumn(new TableColumn("Start").Width(ReportLayout.Start).Centered())
+            .AddColumn(new TableColumn("End").Width(ReportLayout.End).Centered())
+            .AddColumn(new TableColumn("Time").Width(layout.Total).RightAligned().Footer($"[bold]{FormatDuration(day.Total)}[/]"));
 
         foreach (var interval in day.Intervals)
         {
             table.AddRow(
+                Markup.Escape(interval.Task),
                 $"{interval.Start:HH:mm}",
                 $"{interval.End:HH:mm}",
-                FormatDuration(interval.Duration),
-                Markup.Escape(interval.Task));
+                FormatDuration(interval.Duration));
         }
-        AnsiConsole.Write(table);
+        console.Write(table);
     }
 
     internal static string FormatDuration(TimeSpan duration) => $"{(int)duration.TotalHours:00}:{duration.Minutes:00}";

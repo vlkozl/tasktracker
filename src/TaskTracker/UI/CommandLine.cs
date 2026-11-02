@@ -93,9 +93,7 @@ public static class CommandLine
         var today = LocalClock.DateOf(now);
         var log = logs.Load(day);
         var summary = DaySummary.From(log);
-        ConsoleUi.WriteReport(summary);
-        if (intervals && summary.Intervals.Count > 0)
-            ConsoleUi.WriteIntervals(summary);
+        ConsoleUi.WriteReport(summary, intervals: intervals);
 
         // The running task's time is written only when it ends, so it is not in the table yet. If the
         // table already has time for it since its start, an end is being written right now: say nothing,

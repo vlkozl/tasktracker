@@ -109,8 +109,9 @@ Reports only read the logs, so they never stop a task and work at any time:
 - if the TaskTracker window is open, the report says so. Its current task is included up to the last save, at
   most a minute ago. Press `R` in the window for a live report.
 
-Add `--intervals` (or `-i`, before or after the date) to list the day's logged intervals after the summary: start, end,
-duration and task, in time order. Like the summary, it shows the log as saved, so a task started with `start` isn't
+Add `--intervals` (or `-i`, before or after the date) to list the day's logged intervals after the summary: task, start,
+end and time, in time order, with the day's total at the bottom. Its columns line up with the summary's as long as
+both tables fit the console width; with long task names in a narrow window, each table is shrunk on its own. Like the summary, it shows the log as saved, so a task started with `start` isn't
 listed until it ends. With `--json` it changes nothing: the JSON already holds every interval.
 
 Add `--json` (before or after the date) to get the day's log as JSON, with nothing else on stdout, so it can be

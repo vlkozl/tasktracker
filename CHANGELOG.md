@@ -11,6 +11,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - A PowerShell installer for the current user, `scripts/Install-TaskTracker.ps1`. One command (`irm … | iex`, see the README) downloads the latest release from GitHub, installs it to `%LOCALAPPDATA%\Programs\TaskTracker` and adds that folder to the user's PATH. Running it again updates TaskTracker in place. It needs no GitHub CLI, authentication or administrator rights. `-Version vX.Y.Z` installs a specific release.
 
+### Changed
+
+- The intervals table (`report --intervals`, and `I` in the `R` report) lines up with the day's summary: both tables have the same width, and Start, End and Time have the same widths as First start, Last end and Total, as long as both fit the console width. Its columns are now Task, Start, End, Time, in the summary's order (before: Start, End, Duration, Task), and it ends with a total line, like the summary: the number of intervals and the day's total.
+- The keys on the status screen are shown in two shorter rows, in columns:
+
+  ```
+  [N] new task      [P] pause      [R] report
+  [S] switch task   [E] end task   [Q] quit
+  ```
+
+  With no task running, `P` and `E` are still hidden: **[N] new task / [S] start a task** and **[R] report / [Q] quit**.
+
 ## [1.6.0] - 2026-10-28
 
 ### Added

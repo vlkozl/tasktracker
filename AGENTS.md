@@ -7,8 +7,9 @@ log format and code signing, read [README.md](README.md). This file covers how t
 
 The main promise of the app is that it is simple to use, and it must stay that way. New features are added
 on top of what users already know (*progressive disclosure*), and they never change how the existing,
-simple behaviour works (*backward compatibility*). This covers everything a user sees or keeps: keys, commands,
-flags, screens, reports, output, and the files the app creates.
+simple behaviour works (*backward compatibility*). This covers what a user does and what scripts and files
+depend on: keys, commands, flags, `report --json`, and the files the app creates. How screens and tables look
+(layout, column order, headers, wording) may change to make them clearer; that is not a breaking change.
 
 - **The basic use doesn't change.** `TaskTracker`, `start <task>`, `end` and `report` with no extra arguments,
   and the existing keys, behave as they do now. Don't add a required argument, step, prompt or setting to them.
@@ -16,7 +17,8 @@ flags, screens, reports, output, and the files the app creates.
   command, so that a user who doesn't use it never notices it. Combinations that make no sense are harmless
   (`--intervals` with `--json` is ignored), not errors.
 - **Additive only.** Don't remove or rename keys, commands or flags, and don't give an existing one a new
-  meaning. Existing output keeps its shape. `report --json` keeps nothing but JSON on stdout.
+  meaning. `report --json` keeps its shape (fields are only added, never removed, renamed or retyped) and
+  keeps nothing but JSON on stdout. Text output for people may be reshaped; note it in `CHANGELOG.md` under Changed.
 - **Files.** No new files or folders unless a feature can't work without them, and no config file that must
   exist. The log format stays backward compatible (see [Storage](#storage)).
 - **Small surface.** Prefer extending an existing command or screen over adding a new one, and good defaults
