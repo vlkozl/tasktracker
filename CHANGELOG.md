@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - A PowerShell installer for the current user, `scripts/Install-TaskTracker.ps1`. One command (`irm … | iex`, see the README) downloads the latest release from GitHub, installs it to `%LOCALAPPDATA%\Programs\TaskTracker` and adds that folder to the user's PATH. Running it again updates TaskTracker in place. It needs no GitHub CLI, authentication or administrator rights. `-Version vX.Y.Z` installs a specific release.
+- The day's summary (`report`, `R`, and the summary printed on `Q` or Ctrl+C) has a bar chart under the table: time per task, longest first, as wide as the table, bars measured from zero (any task with time gets at least one block), each task in its own colour. A task keeps its colour while the `R` report redraws. The summary shown when TaskTracker starts stays a table only. A task name too long for the chart's labels is shortened there with `...`, so each bar stays on one line.
+- Task names have at most 50 characters. Typing a name stops at 50, the prompt says so, and `TaskTracker start` with a longer new name prints an error and starts nothing. Logs with longer names still load and show them, and `start` accepts a longer name that is already logged.
 
 ### Changed
 
@@ -22,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ```
 
   With no task running, `P` and `E` are still hidden: **[N] new task / [S] start a task** and **[R] report / [Q] quit**.
+- The screens use only characters that every Windows console font has, so they look the same in cmd, Windows PowerShell and PowerShell 7, in Windows Terminal and the classic console: `►` running, `║` paused (before: `⏸`, which some consoles drew two cells wide), `■` stopped, `·` in the status header and `-` in time ranges. A note that the TaskTracker window is open is marked `!` instead of `▶`, and a running task is always green.
 
 ## [1.6.0] - 2026-10-28
 

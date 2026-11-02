@@ -8,6 +8,15 @@ public sealed class DayLog
 
     public static string NormalizeName(string name) => name.Trim();
 
+    /// <summary>
+    /// Longest name a user can type for a new task, in characters as shown (an emoji or accented letter is one),
+    /// so names fit the report tables and chart. Only input is checked: older logs with longer names still load.
+    /// </summary>
+    public const int MaxNameLength = 50;
+
+    public static bool IsTooLong(string name) =>
+        new System.Globalization.StringInfo(NormalizeName(name)).LengthInTextElements > MaxNameLength;
+
     public TaskLog? FindTask(string name)
     {
         var normalized = NormalizeName(name);

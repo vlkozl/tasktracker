@@ -384,6 +384,39 @@ public sealed class CommandTrackerTests : IDisposable
     private TimeSpan Total(DateOnly day, string task) =>
         TimeSpan.FromSeconds(_temp.Store.Load(day).FindTask(task)!.TotalSeconds);
 
+    [Fact]
+    public void StartCommand_RefusesANameOverTheLimit_AndStartsNothing()
+    {
+        var tooLong = new string('x', TaskTracker.Models.DayLog.MaxNameLength + 1);
+
+        Assert.Equal(1, TaskTracker.UI.CommandLine.Run(["start", tooLong], _temp.Store, _commands, _time));
+        Assert.Null(_open.Load());
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(0)]
+    public void StartCommand_AcceptsALongNameAlreadyLogged(int daysAgo)
+    {
+        var longName = new string('x', TaskTracker.Models.DayLog.MaxNameLength + 1);
+        var old = new Models.DayLog { Date = Day.AddDays(daysAgo) };
+        old.GetOrAddTask(longName).Intervals.Add(new Models.Interval { Start = At(7, 0).AddDays(daysAgo), End = At(8, 0).AddDays(daysAgo) });
+        _temp.Store.Save(old);
+
+        Assert.Equal(0, TaskTracker.UI.CommandLine.Run(["start", longName.ToUpperInvariant()], _temp.Store, _commands, _time));
+        Assert.Equal(longName, _open.Load()!.Task);
+    }
+
+    [Theory]
+    [InlineData(50, false)]
+    [InlineData(51, true)]
+    public void IsTooLong_CountsCharactersAsShown_AndIgnoresSurroundingSpaces(int letters, bool tooLong)
+    {
+        Assert.Equal(tooLong, TaskTracker.Models.DayLog.IsTooLong("  " + new string('a', letters) + "  "));
+        // An emoji is two chars in .NET but one character on screen.
+        Assert.Equal(tooLong, TaskTracker.Models.DayLog.IsTooLong(string.Concat(Enumerable.Repeat("😀", letters))));
+    }
+
     private static DateTimeOffset At(int hour, int minute) => new(2026, 10, 24, hour, minute, 0, TimeSpan.Zero);
 
     /// <summary>A clock that can be set backwards, which <see cref="FakeTimeProvider"/> can't do.</summary>

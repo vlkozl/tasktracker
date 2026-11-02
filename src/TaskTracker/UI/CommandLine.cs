@@ -34,6 +34,11 @@ public static class CommandLine
                 ConsoleUi.WriteHelp(logs.Directory);
                 return 0;
 
+            // Only a new name is checked: a longer one already logged (before the limit) keeps working.
+            case "start" when DayLog.IsTooLong(rest) && logs.KnownSpelling(rest, before: today.AddDays(1)) is null:
+                AnsiConsole.MarkupLine($"[red]A task name has at most {DayLog.MaxNameLength} characters.[/] Nothing was started.");
+                return 1;
+
             case "start" when rest.Length > 0:
                 return Exclusive(AppIsOpen, () => Start(commands, rest, today));
 
@@ -58,13 +63,13 @@ public static class CommandLine
         var name = Markup.Escape(result.Open.Task);
         if (result.AlreadyRunning)
         {
-            AnsiConsole.MarkupLine($"[yellow]▶ {name} is already running[/] (since {Time(result.Open.Start, today)}).");
+            AnsiConsole.MarkupLine($"[green]► {name} is already running[/] (since {Time(result.Open.Start, today)}).");
             return 0;
         }
 
         if (result.Ended is not null)
             WriteEnded(result.Ended);
-        AnsiConsole.MarkupLine($"[green]▶ Started {name}[/] at {result.Open.Start:HH:mm}. End it with [bold]TaskTracker end[/].");
+        AnsiConsole.MarkupLine($"[green]► Started {name}[/] at {result.Open.Start:HH:mm}. End it with [bold]TaskTracker end[/].");
         return 0;
     }
 
@@ -102,8 +107,8 @@ public static class CommandLine
             log.FindTask(open.Task)?.Intervals.Any(i => i.Start >= open.Start) != true)
         {
             AnsiConsole.MarkupLine(
-                $"[yellow]▶ {Markup.Escape(open.Task)} is running since {Time(open.Start, day)}, not included above.[/] " +
-                "[grey]End it with TaskTracker end.[/]");
+                $"[green]► {Markup.Escape(open.Task)} is running since {Time(open.Start, day)}[/][grey], not included above. " +
+                "End it with TaskTracker end.[/]");
         }
 
         // The app saves its running interval every minute, but this copy can't tell which task that is.
@@ -113,7 +118,7 @@ public static class CommandLine
         if (appMayBeBehind && SingleInstance.IsHeld())
         {
             AnsiConsole.MarkupLine(
-                "[yellow]▶ TaskTracker is open and may be timing a task.[/] " +
+                "[yellow]! TaskTracker is open and may be timing a task.[/] " +
                 "[grey]Its time is included up to the last save (at most a minute ago). Press R there for a live report.[/]");
         }
         if (File.Exists(logs.PathFor(day)))
@@ -167,8 +172,8 @@ public static class CommandLine
     private static void WriteEnded(EndedTask ended)
     {
         AnsiConsole.MarkupLine(
-            $"■ Ended [bold]{Markup.Escape(ended.Task)}[/]: [bold]{ConsoleUi.FormatDuration(ended.Worked)}[/] " +
-            $"({Time(ended.Start, ended.End)}–{ended.End:HH:mm})");
+            $"[grey]■[/] Ended [bold]{Markup.Escape(ended.Task)}[/]: [bold]{ConsoleUi.FormatDuration(ended.Worked)}[/] " +
+            $"({Time(ended.Start, ended.End)}-{ended.End:HH:mm})");
         if (ended.OffUnknown)
             AnsiConsole.MarkupLine("[yellow]  Could not read the Windows sleep history, so time asleep or switched off may be counted.[/]");
         else if (ended.Off >= TimeSpan.FromMinutes(1))

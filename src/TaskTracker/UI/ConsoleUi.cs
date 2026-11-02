@@ -3,6 +3,7 @@ using System.Reflection;
 using System.Text;
 using Spectre.Console;
 using Spectre.Console.Rendering;
+using TaskTracker.Models;
 using TaskTracker.Reporting;
 using TaskTracker.Storage;
 using TaskTracker.Tracking;
@@ -37,8 +38,8 @@ public sealed class ConsoleUi(Tracker tracker, DayLogStore store)
         AnsiConsole.Clear();
         AnsiConsole.MarkupLine($"[bold]TaskTracker[/] {Markup.Escape(Version)}");
         var status = tracker.GetStatus();
-        if (status.Day.TaskCount > 0)
-            WriteReport(status.Day);
+        if (status.Day.TaskCount > 0) // just the table, without the chart, so the task picker stays near the top
+            WriteSummary(status.Day, ReportLayout.For(status.Day), AnsiConsole.Console);
 
         var task = continueTask ?? PickTask(allowCancel: false)!;
         var running = true;
@@ -220,8 +221,8 @@ public sealed class ConsoleUi(Tracker tracker, DayLogStore store)
         var duration = FormatDuration(status.CurrentTaskTotal);
         var current = status.State switch
         {
-            TrackerState.Running => $"[green]▶ {task}[/]   [bold]{duration}[/]",
-            TrackerState.Paused => $"[yellow]⏸ Paused: {task}[/]   [bold]{duration}[/]",
+            TrackerState.Running => $"[green]► {task}[/]   [bold]{duration}[/]",
+            TrackerState.Paused => $"[yellow]║ Paused: {task}[/]   [bold]{duration}[/]",
             _ => "[grey]■ No task running[/]",
         };
         // Two rows, read top to bottom per column: task choice, the current task, the day. Idle hides P and E.
@@ -237,7 +238,7 @@ public sealed class ConsoleUi(Tracker tracker, DayLogStore store)
             $"[grey]{KeyRow(keys, 0)}\n{KeyRow(keys, 1)}[/]";
 
         var panel = new Panel(new Markup(text))
-            .Header($" TaskTracker {Markup.Escape(Version)} — {status.Day.Date:ddd, dd MMM yyyy} ")
+            .Header($" TaskTracker {Markup.Escape(Version)} · {status.Day.Date:ddd, dd MMM yyyy} ")
             .Border(BoxBorder.Rounded)
             .Padding(2, 1);
         return (text, panel);
@@ -268,18 +269,24 @@ public sealed class ConsoleUi(Tracker tracker, DayLogStore store)
     private static string? AskNewTask(bool allowCancel)
     {
         if (!allowCancel)
-            return AnsiConsole.Prompt(new TextPrompt<string>("Task name:")).Trim();
+        {
+            return AnsiConsole.Prompt(new TextPrompt<string>($"Task name [grey](up to {DayLog.MaxNameLength} characters)[/]:")
+                .Validate(n => DayLog.IsTooLong(n)
+                    ? ValidationResult.Error($"[red]A task name has at most {DayLog.MaxNameLength} characters.[/]")
+                    : ValidationResult.Success())).Trim();
+        }
 
-        AnsiConsole.Markup("Task name [grey](Esc or empty to cancel)[/]: ");
-        var name = ReadLineOrEscape()?.Trim();
+        AnsiConsole.Markup($"Task name [grey](up to {DayLog.MaxNameLength} characters, Esc or empty to cancel)[/]: ");
+        var name = ReadLineOrEscape(DayLog.MaxNameLength)?.Trim();
         return string.IsNullOrEmpty(name) ? null : name;
     }
 
     /// <summary>
     /// Reads a line of text, returning null on Esc. Spectre's TextPrompt can't be cancelled with Esc,
     /// so this handles just the keys a task name needs: characters, Backspace, Enter and Esc.
+    /// Typing stops at <paramref name="maxLength"/> characters (leading spaces, which are trimmed, don't count).
     /// </summary>
-    private static string? ReadLineOrEscape()
+    private static string? ReadLineOrEscape(int maxLength)
     {
         var start = Console.GetCursorPosition();
         var text = new StringBuilder();
@@ -305,6 +312,13 @@ public sealed class ConsoleUi(Tracker tracker, DayLogStore store)
 
                 default:
                     if (char.IsControl(key.KeyChar))
+                        break;
+                    // A low surrogate completes the high one before it, a character already counted. Without
+                    // one (its high half was refused at the limit) it is dropped: a lone half can't be saved.
+                    // Anything else is refused only if it adds a character, so accents still combine.
+                    if (char.IsLowSurrogate(key.KeyChar)
+                            ? text.Length == 0 || !char.IsHighSurrogate(text[^1])
+                            : new StringInfo((text.ToString() + key.KeyChar).TrimStart()).LengthInTextElements > maxLength)
                         break;
                     text.Append(key.KeyChar);
                     if (!char.IsHighSurrogate(key.KeyChar)) // otherwise wait for the other half
@@ -384,8 +398,8 @@ public sealed class ConsoleUi(Tracker tracker, DayLogStore store)
         var task = Markup.Escape(status.CurrentTask ?? "");
         return status.State switch
         {
-            TrackerState.Running => $"[green]▶ {task} is running[/] [grey]({FormatDuration(status.CurrentTaskTotal)} today, counted up to now)[/]",
-            TrackerState.Paused => $"[yellow]⏸ {task} is paused[/]",
+            TrackerState.Running => $"[green]► {task} is running[/] [grey]({FormatDuration(status.CurrentTaskTotal)} today, counted up to now)[/]",
+            TrackerState.Paused => $"[yellow]║ {task} is paused[/]",
             _ => "[grey]No task is running.[/]",
         };
     }
@@ -403,7 +417,7 @@ public sealed class ConsoleUi(Tracker tracker, DayLogStore store)
         commands.AddRow("TaskTracker", "Start tracking (asks for a task first)");
         commands.AddRow("TaskTracker start <task>", "Start a task without keeping a window open");
         commands.AddRow("TaskTracker end [[<task>]]", "End the task started with [bold]start[/]");
-        commands.AddRow("TaskTracker report", "Print today's summary and exit");
+        commands.AddRow("TaskTracker report", "Print today's summary (table and bar chart) and exit");
         commands.AddRow("TaskTracker report [[yyyy-MM-dd]]", "Print another day's summary");
         commands.AddRow("TaskTracker report ... --intervals", "Also list every interval (also [bold]-i[/])");
         commands.AddRow("TaskTracker report ... --json", "Print the day's log as JSON, for scripts");
@@ -427,7 +441,7 @@ public sealed class ConsoleUi(Tracker tracker, DayLogStore store)
         AnsiConsole.Write(keys);
         AnsiConsole.WriteLine();
 
-        AnsiConsole.MarkupLine("Task names are free text, matched ignoring case and surrounding spaces.");
+        AnsiConsole.MarkupLine($"Task names are free text up to {DayLog.MaxNameLength} characters, matched ignoring case and surrounding spaces.");
         AnsiConsole.MarkupLine("A task keeps the spelling it was logged with before; a new one keeps yours.");
         AnsiConsole.MarkupLine("Sleep over 5 minutes is not counted. Only one copy runs at a time.");
         AnsiConsole.MarkupLine($"Logs: [grey]{Markup.Escape(Path.Combine(logDirectory, "yyyy-MM-dd.json"))}[/]");
@@ -446,8 +460,76 @@ public sealed class ConsoleUi(Tracker tracker, DayLogStore store)
 
         var layout = ReportLayout.For(day);
         WriteSummary(day, layout, console);
-        if (intervals && day.Intervals.Count > 0)
+        WriteChart(day, layout, console);
+        if (intervals) // a day with tasks always has intervals: DaySummary keeps only tasks that have some
             WriteIntervals(day, layout, console);
+    }
+
+    /// <summary>Distinct colours that read on dark and light backgrounds. With more tasks than colours, they repeat.</summary>
+    private static readonly Color[] ChartColors =
+    [
+        Color.SteelBlue1, Color.SeaGreen2, Color.Gold1, Color.HotPink, Color.MediumPurple1, Color.DarkOrange,
+        Color.Turquoise2, Color.IndianRed1,
+    ];
+
+    /// <summary>
+    /// Time per task as bars, longest first, as wide as the summary table. A task's colour comes from its row
+    /// in the table (first start order), so it keeps its colour while the live report redraws and bars swap places.
+    /// </summary>
+    /// <remarks>
+    /// Drawn by hand rather than with Spectre's BarChart, which scales bars from the smallest value instead of
+    /// zero (the shortest task got no bar) and wraps labels longer than half its width.
+    /// </remarks>
+    private static void WriteChart(DaySummary day, ReportLayout layout, IAnsiConsole console)
+    {
+        const int LabelGap = 2;
+        var width = Math.Min(layout.TableWidth, console.Profile.Width);
+        var valueWidth = layout.Total; // every value is at most the day's total, which sets the Total column
+
+        // Names get up to half the width; the table above shows a longer one in full, the chart shortens it.
+        // The row index sets the colour; the order of the bars is longest first.
+        var rows = day.Tasks
+            .Select((task, row) => (task, row, label: Shorten(task.Task, width / 2 - LabelGap)))
+            .OrderByDescending(x => x.task.Total)
+            .ToList();
+        var labelWidth = rows.Max(x => x.label.GetCellWidth());
+        var barWidth = Math.Max(1, width - labelWidth - LabelGap - 1 - valueWidth);
+        var longest = rows[0].task.Total;
+
+        var grid = new Grid()
+            .AddColumn(new GridColumn().RightAligned().NoWrap().PadLeft(0).PadRight(LabelGap))
+            .AddColumn(new GridColumn().NoWrap().PadLeft(0).PadRight(0));
+        foreach (var (task, row, label) in rows)
+        {
+            // From zero, and at least one block for any time at all, so no task looks like nothing.
+            var blocks = longest <= TimeSpan.Zero || task.Total <= TimeSpan.Zero
+                ? 0
+                : Math.Max(1, (int)Math.Round(barWidth * (task.Total / longest)));
+            var color = ChartColors[row % ChartColors.Length].ToMarkup();
+            grid.AddRow(
+                Markup.Escape(label),
+                $"[{color}]{new string('█', blocks)}[/] {FormatDuration(task.Total)}");
+        }
+        console.Write(grid);
+    }
+
+    /// <summary>The text cut to <paramref name="width"/> cells, ending in "..." when cut. Never splits a character.</summary>
+    private static string Shorten(string text, int width)
+    {
+        if (text.GetCellWidth() <= width)
+            return text;
+        var shortened = new StringBuilder();
+        var cells = 0;
+        var elements = StringInfo.GetTextElementEnumerator(text);
+        while (elements.MoveNext())
+        {
+            var element = elements.GetTextElement();
+            cells += element.GetCellWidth();
+            if (cells > width - 3)
+                break;
+            shortened.Append(element);
+        }
+        return shortened.ToString().TrimEnd() + "...";
     }
 
     /// <summary>
@@ -457,11 +539,18 @@ public sealed class ConsoleUi(Tracker tracker, DayLogStore store)
     /// </summary>
     private sealed record ReportLayout(int Task, int Intervals, int Total)
     {
-        public const int Start = 11; // "First start"
-        public const int End = 8;    // "Last end"
+        // The summary's headers, the widest in these columns. WriteSummary uses them, so renaming one
+        // keeps the two tables lined up.
+        public const string StartHeader = "First start";
+        public const string EndHeader = "Last end";
+        public static readonly int Start = StartHeader.Length;
+        public static readonly int End = EndHeader.Length;
         private const int ColumnChrome = 3; // padding left and right, plus the border between columns
 
         public int IntervalsTask => Task + Intervals + ColumnChrome;
+
+        /// <summary>Both tables' outer width: five columns, each with its padding and the border to its left, plus the right border.</summary>
+        public int TableWidth => Task + Intervals + Start + End + Total + 5 * ColumnChrome + 1;
 
         public static ReportLayout For(DaySummary day)
         {
@@ -486,8 +575,8 @@ public sealed class ConsoleUi(Tracker tracker, DayLogStore store)
             .Title($"{day.Date:dddd, dd MMM yyyy}")
             .AddColumn(new TableColumn("Task").Width(layout.Task).Footer($"[bold]{TasksFooter(day)}[/]"))
             .AddColumn(new TableColumn("Intervals").Width(layout.Intervals).RightAligned())
-            .AddColumn(new TableColumn("First start").Width(ReportLayout.Start).Centered())
-            .AddColumn(new TableColumn("Last end").Width(ReportLayout.End).Centered())
+            .AddColumn(new TableColumn(ReportLayout.StartHeader).Width(ReportLayout.Start).Centered())
+            .AddColumn(new TableColumn(ReportLayout.EndHeader).Width(ReportLayout.End).Centered())
             .AddColumn(new TableColumn("Total").Width(layout.Total).RightAligned().Footer($"[bold]{FormatDuration(day.Total)}[/]"));
 
         foreach (var task in day.Tasks)

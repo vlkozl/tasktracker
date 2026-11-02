@@ -113,6 +113,13 @@ VS Code tasks in `.vscode/tasks.json` wrap the same commands (`build`, `test`, `
 
 ## UI (Spectre.Console)
 
+- Output must look the same in cmd, Windows PowerShell and PowerShell 7, in Windows Terminal and the classic
+  console, with any console font. So the app prints only ASCII and characters from code page 437, which every
+  Windows console font has, plus the rounded corners `╭╮╰╯` of Spectre's `Rounded` borders (checked in the
+  classic console with Consolas, Lucida Console and raster fonts). No emoji, no characters that may be drawn as
+  emoji or two cells wide (`▶`, `⏸`), no variation selectors. Symbols in use: `►` running, `║` paused, `■` stopped,
+  `!` note, `·` separator, `█` chart bars. Colour carries the rest of the meaning. `ReportTableTests` checks the
+  report output against this set.
 - `AnsiConsole.Live` draws nothing until `ctx.Refresh()`. Keep the initial `Refresh()` in `WaitForAction`.
 - Task names are arbitrary user text. Wrap them in `Markup.Escape` everywhere they appear in markup,
   including `SelectionPrompt.UseConverter`.

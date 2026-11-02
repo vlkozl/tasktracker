@@ -104,6 +104,9 @@ While the TaskTracker window is open, `start` and `end` are refused, so only one
 When you open the window, it carries on with the task started with `start`.
 
 `TaskTracker report` prints today's summary, and `TaskTracker report 2026-10-23` any other day (`yyyy-MM-dd`).
+Below the table, a bar chart shows the time per task, longest first, each task in its own colour. A name too
+long for the chart is shortened there with `...`; the table shows it in full. The `R` report
+and the summary printed on `Q` show it too.
 Reports only read the logs, so they never stop a task and work at any time:
 - a task started with `start` is shown as running and isn't in the table yet: its time is added when it ends;
 - if the TaskTracker window is open, the report says so. Its current task is included up to the last save, at
@@ -123,7 +126,8 @@ The format is described under [Logs](#logs).
 
 Run `TaskTracker --help` (or `-h`, `-?`, `/?`) for a summary of commands and keys.
 
-Task names are any text. Matching ignores case and surrounding spaces, so `Bug fix` and `bug fix ` count as the same task.
+Task names are any text up to 50 characters; typing stops at 50, and `start` refuses a longer new name. Task names
+already logged with more characters keep working. Matching ignores case and surrounding spaces, so `Bug fix` and `bug fix ` count as the same task.
 A task keeps the spelling it was last logged with, however you type it later: once `TASK-1123` is in a log,
 starting `task-1123` records it as `TASK-1123`. A new task keeps the spelling you first type.
 The task picker shows at most 10 tasks, the most recently used first. Typing searches every task ever logged and
